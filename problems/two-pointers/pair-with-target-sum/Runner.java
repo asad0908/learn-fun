@@ -21,16 +21,16 @@ public class Runner {
         j.stress("random sorted arrays vs brute", 3000, g -> {
             int n = g.intIn(2, 12);
             int[] a = g.sortedArray(n, -8, 8);
-            int target = g.intIn(-16, 16);
+            int i0 = g.intIn(0, n - 2), k0 = g.intIn(i0 + 1, n - 1);
+            int target = a[i0] + a[k0];
             String in = "numbers=" + Fmt.show(a) + " target=" + target;
 
             int[] mine = s.twoSum(Fmt.copy(a), target);
             int[] ref = new Brute().twoSum(Fmt.copy(a), target);
 
             if (ref.length == 0) {
-                return mine.length == 0 ? null
-                    : "input    " + in + "\n        brute    no pair exists"
-                      + "\n        yours    " + Fmt.show(mine);
+                return "input    " + in + "\n        brute    no pair exists"
+                    + " (generator invariant violated -- target was built from a[" + i0 + "]+a[" + k0 + "])";
             }
             if (mine.length != 2) {
                 return "input    " + in + "\n        brute    " + Fmt.show(ref)
