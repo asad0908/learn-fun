@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# dsa -- run the DSA practice system from any directory (Git Bash / MSYS).
+#
+# Setup: copy this file (and dsa.cmd) into a directory on your PATH, e.g.
+# ~/.local/bin, then set DSA_HOME to wherever you cloned this repo:
+#   export DSA_HOME="/c/path/to/dsa-practice-kit"
+# Add that export to your ~/.bashrc or ~/.zshrc so it persists.
+if [ -z "$DSA_HOME" ]; then
+  echo "dsa: DSA_HOME is not set" >&2
+  echo "     export DSA_HOME=/path/to/dsa-practice-kit and try again" >&2
+  exit 1
+fi
+if [ ! -f "$DSA_HOME/dsa.py" ]; then
+  echo "dsa: cannot find dsa.py under $DSA_HOME" >&2
+  echo "     check that DSA_HOME points at your dsa-practice-kit checkout" >&2
+  exit 1
+fi
+exec python "$DSA_HOME/dsa.py" "$@"
