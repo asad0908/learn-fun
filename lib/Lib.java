@@ -153,6 +153,72 @@ class Gen {
         }
         return out.toArray(new int[0][]);
     }
+
+    /** connected undirected edge list on n nodes: a random spanning tree plus
+     *  up to `extra` further distinct edges. No self loops, no duplicates. */
+    int[][] connectedEdges(int n, int extra) {
+        int[] order = permutation(n);
+        Set<Long> seen = new HashSet<>();
+        List<int[]> out = new ArrayList<>();
+        for (int i = 1; i < n; i++) {
+            int u = order[i], v = order[r.nextInt(i)];
+            seen.add((long) Math.min(u, v) * n + Math.max(u, v));
+            out.add(new int[]{u, v});
+        }
+        int guard = 0;
+        while (extra > 0 && guard++ < 200) {
+            int u = r.nextInt(n), v = r.nextInt(n);
+            if (u == v) continue;
+            if (!seen.add((long) Math.min(u, v) * n + Math.max(u, v))) continue;
+            out.add(new int[]{u, v});
+            extra--;
+        }
+        return out.toArray(new int[0][]);
+    }
+
+    /** directed edge list u->v on n nodes: no self loops, no duplicate pairs */
+    int[][] digraphEdges(int n, int m) {
+        Set<Long> seen = new HashSet<>();
+        List<int[]> out = new ArrayList<>();
+        int guard = 0;
+        while (out.size() < m && guard++ < m * 40 + 40) {
+            int u = r.nextInt(n), v = r.nextInt(n);
+            if (u == v || !seen.add((long) u * n + v)) continue;
+            out.add(new int[]{u, v});
+        }
+        return out.toArray(new int[0][]);
+    }
+
+    /** acyclic directed edge list: edges only go forward in a random node order */
+    int[][] dagEdges(int n, int m) {
+        int[] order = permutation(n);
+        int[] rank = new int[n];
+        for (int i = 0; i < n; i++) rank[order[i]] = i;
+        Set<Long> seen = new HashSet<>();
+        List<int[]> out = new ArrayList<>();
+        int guard = 0;
+        while (out.size() < m && guard++ < m * 40 + 40) {
+            int u = r.nextInt(n), v = r.nextInt(n);
+            if (rank[u] >= rank[v] || !seen.add((long) u * n + v)) continue;
+            out.add(new int[]{u, v});
+        }
+        return out.toArray(new int[0][]);
+    }
+
+    /** grid of chars, each cell drawn from `alphabet` */
+    char[][] charGrid(int rows, int cols, String alphabet) {
+        char[][] g = new char[rows][cols];
+        for (int i = 0; i < rows; i++)
+            for (int j = 0; j < cols; j++) g[i][j] = alphabet.charAt(r.nextInt(alphabet.length()));
+        return g;
+    }
+
+    /** adjacency lists from an edge list, each neighbour list in random order */
+    List<List<Integer>> shuffledAdj(int n, int[][] edges, boolean directed) {
+        List<List<Integer>> adj = Fmt.adj(n, edges, directed);
+        for (List<Integer> l : adj) Collections.shuffle(l, r);
+        return adj;
+    }
 }
 
 /* ------------------------------------------------------- printing / parsing */
@@ -276,6 +342,38 @@ class Fmt {
         int[] a = new int[out.size()];
         for (int i = 0; i < a.length; i++) a[i] = out.get(i);
         return a;
+    }
+
+    /** adjacency lists for an edge list; neighbours come out in edge order */
+    static List<List<Integer>> adj(int n, int[][] edges, boolean directed) {
+        List<List<Integer>> adj = new ArrayList<>();
+        for (int i = 0; i < n; i++) adj.add(new ArrayList<>());
+        for (int[] e : edges) {
+            adj.get(e[0]).add(e[1]);
+            if (!directed) adj.get(e[1]).add(e[0]);
+        }
+        return adj;
+    }
+
+    /** build a char grid from row strings, e.g. grid("11000", "11010") */
+    static char[][] grid(String... rows) {
+        char[][] g = new char[rows.length][];
+        for (int i = 0; i < rows.length; i++) g[i] = rows[i].toCharArray();
+        return g;
+    }
+
+    static char[][] copy(char[][] a) {
+        if (a == null) return null;
+        char[][] b = new char[a.length][];
+        for (int i = 0; i < a.length; i++) b[i] = a[i].clone();
+        return b;
+    }
+
+    static List<List<Integer>> copy(List<List<Integer>> a) {
+        if (a == null) return null;
+        List<List<Integer>> b = new ArrayList<>();
+        for (List<Integer> l : a) b.add(new ArrayList<>(l));
+        return b;
     }
 
     /** deep clone so a destructive Solution cannot poison the Brute run */

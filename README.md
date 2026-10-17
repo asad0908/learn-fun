@@ -36,8 +36,8 @@ If you'd rather not touch your `PATH`, skip steps 2–3 and just run
 
 ## Where things stand
 
-Only **Two Pointers** and **Fast & Slow Pointers** (20 of 185 problems) have a
-scaffolded local judge out of the box. The rest just have the cheat-sheet
+Only **Two Pointers**, **Fast & Slow Pointers**, **Sliding Window** and
+**Graphs** (52 of 185 problems) have a scaffolded local judge out of the box. The rest just have the cheat-sheet
 entry and a link to the original LeetCode/GFG problem. Run
 `dsa list --missing` to see what's left, and `dsa scaffold <pattern>` (needs
 Claude Code) to build the judge for a pattern yourself — PRs adding scaffolds
