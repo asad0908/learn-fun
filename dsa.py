@@ -15,6 +15,8 @@ Deterministic commands -- picking, tracking, testing, scheduling. No AI:
     dsa review [--start]    everything due today
     dsa open <id>           open a problem in VS Code
     dsa test [id]           compile + run the local judge
+    dsa run [id]            your code on YOUR input (input.txt); Brute = expected
+    dsa run -e "a = [1,2], k = 3"   ...or a one-off case inline
     dsa done [id] -c 4      record a solved attempt (confidence 1-5)
     dsa fail [id]           record a failed attempt
     dsa cold [id]           archive your solution, reset for a blind re-solve
@@ -25,6 +27,8 @@ Deterministic commands -- picking, tracking, testing, scheduling. No AI:
 These launch Claude Code in the DSA folder, so the /dsa-* project commands
 resolve wherever you invoked from:
 
+    dsa clarify [question]  interviewer Q&A before coding: contract, edge cases,
+                            approach go/no-go; logs it to notes.md
     dsa nudge               one escalating interviewer hint
     dsa teach               full first-principles walkthrough
     dsa critique            post-solve interviewer review
@@ -648,6 +652,122 @@ def cmd_test(args):
     sys.exit(rc)
 
 
+INPUT_HEADER = """\
+# Custom input for `dsa run` -- like LeetCode's testcase box, except Brute
+# prints the expected answer too. Edit freely; `dsa run` reruns everything.
+#
+#   signature:  %s
+#
+# One value per parameter, either one per line or all on one line:
+#   [2,7,11,15]                         <- one per line
+#   9
+#   nums = [2,7,11,15], target = 9      <- one line, names optional
+#   Input:  grid = ["101","010"]        <- pasted straight from problem.md
+#   [3,2,0,-4] pos=1                    <- linked list, tail links to index 1
+#   [1,null,2,3]                        <- binary tree, level order
+# Cases follow each other back to back. '#' starts a comment.
+
+"""
+
+
+def stub_signature(p):
+    """(method name, signature line) of the one method in Solution.stub.java"""
+    text = (pdir(p) / "Solution.stub.java").read_text(encoding="utf-8")
+    m = re.search(r"^\s*(?:public\s+|static\s+)*([\w<>\[\], ]+?)\s+(\w+)\s*\(([^)]*)\)\s*\{",
+                  text, re.M)
+    if not m:
+        die("could not find the method in %s" % (pdir(p) / "Solution.stub.java"))
+    return m.group(2), "%s %s(%s)" % (m.group(1).strip(), m.group(2), m.group(3).strip())
+
+
+def example_inputs(p):
+    """Input lines from problem.md's examples, in the shapes Custom.java reads:
+    'Input:  a = 1, b = 2' blocks, or 'a = [1,2], b = 3  ->  answer' rows."""
+    text = (pdir(p) / "problem.md").read_text(encoding="utf-8")
+    sec = re.search(r"^## Examples\s*$(.*?)(?=^## |\Z)", text, re.M | re.S)
+    out = []
+    for block in re.findall(r"```[^\n]*\n(.*?)```", sec.group(1) if sec else "", re.S):
+        for line in block.splitlines():
+            s = line.strip()
+            if s.lower().startswith("input:"):
+                out.append(s[6:].strip())
+            elif "->" in s and re.match(r"^(\w+\s*=|[\[\"'\d-])", s):
+                out.append(cycle_prose_to_pos(s.split("->")[0].strip()))
+    return out
+
+
+def cycle_prose_to_pos(s):
+    """'[3,2,0,-4], tail links to index 1' -> '[3,2,0,-4] pos=1' (and friends)"""
+    m = re.match(r"^(\[[^\]]*\])", s)
+    n = len([x for x in m.group(1)[1:-1].split(",") if x.strip()]) if m else 0
+    s = re.sub(r",\s*tail links to index (\d+)\s*$", r" pos=\1", s)
+    s = re.sub(r",\s*tail links to itself\s*$", " pos=%d" % max(n - 1, 0), s)
+    return re.sub(r",\s*(no cycle|empty)\s*$", "", s)
+
+
+def cmd_run(args):
+    t = load()
+    p = resolve(t, args.id)
+    d = pdir(p)
+    if not is_scaffolded(p):
+        die("%s is not scaffolded -- in Claude Code: /dsa-scaffold %s"
+            % (p["id"], p["id"]))
+    method, sig = stub_signature(p)
+    inp = d / "input.txt"
+    if not inp.exists():
+        ex = example_inputs(p)
+        inp.write_text(INPUT_HEADER % sig + ("\n".join(ex) + "\n" if ex else
+                       "# (no examples could be lifted from problem.md -- add yours)\n"),
+                       encoding="utf-8")
+        print(col("created %s%s" % (inp, " with the problem.md examples" if ex else ""),
+                  "green"))
+    if args.edit:
+        code = shutil.which("code") or shutil.which("code.cmd")
+        if not code:
+            die("VS Code CLI ('code') not found -- edit %s by hand" % inp)
+        subprocess.run([code, str(inp)], check=False)
+        print(col("edit, save, then:  dsa run", "dim"))
+        return
+
+    out = BUILD / p["pattern_slug"] / p["slug"] / "run"
+    out.mkdir(parents=True, exist_ok=True)
+    source = inp
+    if args.case:                       # one-off cases never touch input.txt
+        source = out / "cases.txt"
+        source.write_text("\n".join(args.case) + "\n", encoding="utf-8")
+
+    archive_solution(p, "run")
+    srcs = sorted(str(f) for f in d.glob("*.java")
+                  if not f.name.endswith(".stub.java") and f.name != "Runner.java")
+    print(col("compiling...", "dim"))
+    sys.stdout.flush()
+    # -parameters keeps the real argument names for the output
+    r = subprocess.run(["javac", "-nowarn", "-parameters", "-d", str(out),
+                        str(LIB / "Lib.java"), str(LIB / "Custom.java")] + srcs,
+                       capture_output=True, text=True)
+    if r.returncode:
+        print(col("COMPILE ERROR", "red"))
+        print(r.stdout + r.stderr)
+        sys.exit(1)
+    print(col("running %s on %s" % (p["title"],
+              "your --case input" if args.case else inp.name), "dim"))
+    print("-" * 66)
+    sys.stdout.flush()
+    rc = subprocess.run(["java", "-ea", "-cp", str(out), "Custom",
+                         method, str(source)]).returncode
+    print("-" * 66)
+    if rc == 0:
+        print(col("ALL CASES MATCH BRUTE", "green")
+              + col("   full judge:  dsa test", "dim"))
+    elif rc == 1:
+        print(col("SOME CASES DIFFER", "red")
+              + col("   (a DIFF is only a bug if problem.md allows one answer)", "dim"))
+    else:
+        print(col("fix the input, then rerun", "yellow")
+              + col("   dsa run --edit", "dim"))
+    sys.exit(rc)
+
+
 NUDGE_LADDER = [
     "L1 SOCRATIC -- ask them what they notice about the input (order? bounds? "
     "duplicates?) and what a brute force would cost. Name NO technique. End with "
@@ -885,6 +1005,7 @@ def cmd_dashboard(args):
 # `dsa nudge` and friends launch Claude Code in ROOT so the /dsa-* project
 # commands resolve no matter which directory you invoked from.
 AI_VERBS = {
+    "clarify":  ("dsa-clarify",  "ask the interviewer questions / discuss your approach"),
     "nudge":    ("dsa-nudge",    "interviewer gives one escalating hint"),
     "teach":    ("dsa-teach",    "full first-principles walkthrough"),
     "critique": ("dsa-critique", "post-solve interviewer review"),
@@ -978,6 +1099,14 @@ def main():
     s = sub.add_parser("test", help="compile + run the local judge")
     s.add_argument("id", nargs="?")
     s.set_defaults(fn=cmd_test)
+
+    s = sub.add_parser("run", help="run your code on your own input (Brute gives the expected)")
+    s.add_argument("id", nargs="?")
+    s.add_argument("-e", "--case", action="append", metavar="TEXT",
+                   help='one-off input instead of input.txt, e.g. '
+                        '-e "nums = [1,2,3], k = 2" (repeatable)')
+    s.add_argument("--edit", action="store_true", help="open input.txt in VS Code")
+    s.set_defaults(fn=cmd_run)
 
     s = sub.add_parser("done", help="record a solved attempt")
     s.add_argument("id", nargs="?")

@@ -288,7 +288,7 @@ class Fmt {
     static List<Integer> treeToArray(TreeNode root) {
         List<Integer> out = new ArrayList<>();
         if (root == null) return out;
-        Deque<TreeNode> q = new ArrayDeque<>();
+        Deque<TreeNode> q = new LinkedList<>();   // ArrayDeque rejects the null holes
         q.add(root);
         while (!q.isEmpty()) {
             TreeNode n = q.poll();

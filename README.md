@@ -18,7 +18,7 @@ anyone else's once you clone it.
 Prerequisites:
 - **JDK 21+** on your `PATH` (`javac`/`java`) — problems are solved in Java
 - **Python 3.10+** on your `PATH` — the engine (`dsa.py`) is plain stdlib, no pip installs
-- *(optional)* [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) — only needed for the AI-assisted commands (`dsa nudge`, `dsa teach`, `dsa critique`, `dsa scaffold`, `dsa variant`, `dsa drill`); everything else works without it
+- *(optional)* [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) — only needed for the AI-assisted commands (`dsa clarify`, `dsa nudge`, `dsa teach`, `dsa critique`, `dsa scaffold`, `dsa variant`, `dsa drill`); everything else works without it
 
 1. Clone this repo.
 2. Make `dsa` available from anywhere: copy `bin/dsa` and `bin/dsa.cmd` into a
@@ -55,10 +55,39 @@ keeps working. `dsa where` prints where it's pointing.
 
 ```bash
 dsa next            # next unsolved problem, opens in VS Code
+dsa clarify         # optional: question the interviewer, agree an approach
 # ...solve in Solution.java...
+dsa run             # try it on your own inputs (Brute prints the expected)
 dsa test            # local judge: fixed cases + random stress test
 dsa done -c 4       # log it, schedules the next review
 ```
+
+### Your own inputs -- `dsa run`
+
+LeetCode's custom-testcase box, except you also get the **expected** answer,
+because `Brute.java` is right there as an oracle. The first run creates
+`input.txt` next to your Solution, pre-filled with the examples from
+`problem.md`; add your own cases underneath and rerun.
+
+```text
+[2,7,11,15]                        <- one value per line, like LeetCode
+9
+nums = [2,7,11,15], target = 9     <- or one line, names optional
+Input:  grid = ["101","010"]       <- or pasted straight from problem.md
+[3,2,0,-4] pos=1                   <- linked list whose tail links to index 1
+[1,null,2,3]                       <- binary tree, level order
+```
+
+```bash
+dsa run                              # every case in input.txt
+dsa run -e "nums = [1,1,1], k = 2"   # one-off case, input.txt untouched
+dsa run --edit                       # open input.txt in VS Code
+```
+
+Each case prints your answer and time, Brute's answer, and `ok` / `DIFF`.
+A `DIFF` only means a bug when the problem has a single correct answer; for
+"any valid pair" problems `dsa test` is the real judge. Exceptions show the
+line in your Solution.java; anything over 5 s is reported as a timeout.
 
 `-c` is confidence 1–5 and it drives the spaced-repetition interval:
 1→tomorrow, 2→3 days, 3→a week, 4→16 days, 5→5 weeks, stretching each time you
@@ -120,12 +149,13 @@ These launch Claude Code in the DSA folder for you:
 
 | Command | What it does |
 | --- | --- |
+| `dsa clarify` | The first ten minutes of an interview, before any code. Ask about the contract (empty input? duplicates? what if there's no answer?) and get answers from the spec -- or the interviewer's call where it's silent. Pitch an approach and get pushback, a counterexample, or a go. Never names the technique for you. Ends with the questions a strong candidate would also have asked, logged to `notes.md`. `dsa clarify "can the array be empty?"` jumps straight in. |
 | `dsa nudge` | Interviewer gives **one** hint, deeper each time you ask. Reads your actual code. 5 rungs: Socratic question → technique family → the key invariant → the algorithm in prose → a skeleton with gaps. Never jumps ahead. |
 | `dsa teach` | Full derivation from first principles: brute force → where the waste is → the observation → the algorithm → optimal code → complexity → the reusable pattern trigger. Use *after* you've tried, or when the nudge ladder runs out. |
 | `dsa critique` | Your tests pass — now what would an interviewer say? Complexity, overflow, naming, and the natural follow-up question. |
 
 Already inside a Claude Code session? Type the slash command directly instead —
-`/dsa-nudge`, `/dsa-teach`, `/dsa-critique`. Same thing, keeps your context.
+`/dsa-clarify`, `/dsa-nudge`, `/dsa-teach`, `/dsa-critique`. Same thing, keeps your context.
 
 Nudge depth is tracked per problem and resets when you mark it done, so a hint
 you took today doesn't leak into next month's re-solve. `dsa done` also records
@@ -194,7 +224,9 @@ and your progress is preserved. Hand-added variants and drills survive too.
   submit whenever you want the badge; treat this system as the gym.
 - `lib/Lib.java` holds `ListNode`, `TreeNode`, `Gen` (random inputs), `Fmt`
   (printing, deep copies, tree/list builders) and `Judge`. It's compiled into
-  every problem, so new scaffolds just use it.
+  every problem, so new scaffolds just use it. `lib/Custom.java` is the
+  generic `dsa run` driver -- it reads parameter types by reflection, so new
+  scaffolds get custom input for free.
 - `dsa nudge-state` is internal plumbing for `/dsa-nudge` — you won't need it.
 - `.build/` is throwaway compiler output. `.attempts/` is your personal archive
   of old solutions. Both are gitignored — they're created the first time you
